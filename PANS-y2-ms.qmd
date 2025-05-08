@@ -1,0 +1,141 @@
+---
+title: "An analysis of woodland engagement and socio-demographic profile in Wale's People and Nature Survey (2020/21)"
+title-block-banner: "#6c207f"
+author:
+  - name: Daniel Braby
+    affiliations:
+      - Forest Information and Statistics
+description: "Programme 3: Societal benefits of trees, woods and forests"
+date: today
+date-format: "D MMMM YYYY"
+embed-resources: TRUE
+format:
+  docx:
+    reference-doc: Z:\IFOS\Statistics\Data\Social\Programme 3 work\programme3\fr-reference-doc.docx
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| include: false
+# 
+if(!require(pacman)) {install.packages("pacman")}
+if(!require(devtools)) {install.packages("devtools")}
+
+devtools::install_github("forestresearch/ggGSS")
+
+pacman::p_load(here,
+               haven,
+               readr,
+               readxl,
+               dplyr,
+               tidyr,
+               forcats,
+               ggplot2,
+               scales,
+               ggeffects,
+               performance,
+               ggGSS,
+               janitor)
+```
+
+```{r}
+#| include: false
+#| 
+pans_y2 <- read_sav("wales_21.sav") %>% zap_formats() %>% zap_labels() %>% clean_names()
+
+pans_y2 <- pans_y2 %>% mutate(across(everything(), as.factor))
+
+pans_y2 <- pans_y2 %>%
+  select(m1_q2_4, m2a_q2, no_of_visits, age, gender, qualification, income,
+         home_imd_decile, ethnicity, work_status) %>%
+  rename(imd_decile = home_imd_decile,
+         employment = work_status) %>%
+  mutate(income = as.integer(income),
+         imd_decile = as.numeric(imd_decile))
+
+
+
+```
+
+```{r}
+m1_q2_4 <- pans_y2 %>% 
+  select(-m2a_q2,
+         -no_of_visits)
+```
+
+```{r}
+y2_model <- glm(m1_q2_4 ~.,
+                data = m1_q2_4,
+                family = "binomial")
+
+summary(y2_model)
+```
+
+```{r}
+ggemmeans(y2_model, "age") %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x, predicted)) +
+  geom_point(size = 2,
+             #colour = colour_selector(1)
+             ) +
+  geom_linerange(aes(ymin = conf.low,
+                     ymax = conf.high),
+                 linewidth = 1,
+                 # colour = colour_selector(1)
+                 ) +
+  # scale_y_cont_gss(labels = percent,
+  #                  breaks = seq(0, 1, 0.2),
+  #                  limits = c(0, 1)) +
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "Estimated proportion of woodland visitors") +
+  theme_gss(tick_mark = "x")
+```
+
+```{r}
+ggemmeans(y2_model, "income", rg.limit = 36000) %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x, predicted)) +
+  geom_point(size = 2,
+             #colour = colour_selector(1)
+             ) +
+  geom_linerange(aes(ymin = conf.low,
+                     ymax = conf.high),
+                 linewidth = 1,
+                 # colour = colour_selector(1)
+                 ) +
+  # scale_y_cont_gss(labels = percent,
+  #                  breaks = seq(0, 1, 0.2),
+  #                  limits = c(0, 1)) +
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "Estimated proportion of woodland visitors") +
+  theme_gss(tick_mark = "x")
+```
+
+```{r}
+ggemmeans(y2_model, "imd_decile", rg.limit = 60000) %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x, predicted)) +
+  geom_point(size = 2,
+             #colour = colour_selector(1)
+             ) +
+  geom_linerange(aes(ymin = conf.low,
+                     ymax = conf.high),
+                 linewidth = 1,
+                 # colour = colour_selector(1)
+                 ) +
+  # scale_y_cont_gss(labels = percent,
+  #                  breaks = seq(0, 1, 0.2),
+  #                  limits = c(0, 1)) +
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "Estimated proportion of woodland visitors") +
+  theme_gss(tick_mark = "x")
+```
+
+\
+\
+\

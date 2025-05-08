@@ -1,0 +1,401 @@
+---
+title: "PANS results in Forestry Statistics Chapter 6"
+author: "Daniel Braby, Forest Information and Statistics"
+date: "2023-08-30"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+```{r}
+library(here)
+library(haven)
+library(labelled)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(lubridate)
+```
+
+```{r}
+round2 = function(x, digits) {
+  posneg = sign(x)
+  z = abs(x)*10^digits
+  z = z + 0.5 + sqrt(.Machine$double.eps)
+  z = trunc(z)
+  z = z/10^digits
+  z*posneg
+}
+```
+
+```{r}
+pans_raw <- read_sav(here("raw-data",
+                          "262400153 PANS SPSS Q1-11 Safeguarded 090523.sav"))
+```
+
+Convert all cells to their labels (except the columns which contains the word "Weight").
+
+```{r}
+pans_lbld <- pans_raw |> 
+  mutate(across(.cols = !contains("Weight"), ~to_factor(.)))
+```
+
+# EDA
+
+I think something unusual is going on with the `No_Of_Visits` variable. It's labelled and converting to numeric appears to be doing weird things. Explore this before continuing.
+
+```{r}
+pans_raw |> 
+  select(No_Of_Visits) |> 
+  mutate(label = to_factor(No_Of_Visits),
+         label_numeric = as.numeric(No_Of_Visits)) |> 
+  filter(!is.na(No_Of_Visits)) |> 
+  filter(label != label_numeric)
+```
+
+From Oct-22 to Dec-22, there were [932,443 visits to green and natural spaces](https://www.gov.uk/government/statistics/the-people-and-nature-survey-for-england-adult-data-y3q3-october-2022-december-2022-official-statistics) in England. Try to reproduce this number.
+
+```{r}
+pans_raw |> 
+  select(Wave, M2, No_Of_Visits, Weight_Grossed_No_Of_Visits) |> 
+  filter(M2 == 1) |> 
+  select(-M2) |> 
+  mutate(Wave = to_factor(Wave),
+         No_Of_Visits = remove_val_labels(No_Of_Visits)) |> 
+  filter(No_Of_Visits >=0) |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date)) |> 
+  filter(date >= "2022-10-01" & date <= "2022-12-01") |> 
+  select(-c(wave)) |> 
+  mutate(across(-date, ~as.numeric(.x))) |> 
+  mutate(nb_visit = abs(No_Of_Visits) * Weight_Grossed_No_Of_Visits) |> 
+  summarise(nb_visit = sum(nb_visit, na.rm = TRUE))
+```
+
+From Ann:
+
+> The total number of visits from April 2020 to end of Dec 2022 should be 11399746...let me know if you get a different number and I can double check. For the first two years, i.e., April 2020 to end of March 2022 I get 8521838.
+
+```{r}
+pans_raw |> 
+  select(Wave, M2, No_Of_Visits, Weight_Grossed_No_Of_Visits) |> 
+  filter(M2 == 1) |> 
+  select(-M2) |> 
+  mutate(Wave = to_factor(Wave),
+         No_Of_Visits = remove_val_labels(No_Of_Visits)) |> 
+  filter(No_Of_Visits >=0) |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date)) |> 
+  filter(date >= "2020-04-01" & date <= "2022-03-01") |> 
+  select(-c(wave)) |> 
+  mutate(across(-date, ~as.numeric(.x))) |> 
+  mutate(nb_visit = abs(No_Of_Visits) * Weight_Grossed_No_Of_Visits) |> 
+  summarise(nb_visit = sum(nb_visit, na.rm = TRUE))
+```
+
+Good news: can confirm both numbers!
+
+# Proportion of respondents that visited woodland in the last month
+
+Around 30% said visited forest or woodland in the last month.
+
+```{r}
+woodland_visit_pct <- pans_lbld |> 
+  select(Wave, starts_with("M1_Q2"), Weight_Percent) |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date),
+         fy = nprs::date2fy(date, fye = TRUE)) |> 
+  sjlabelled::label_to_colnames() |> 
+  rename(weight = `Weight - percentages ONLY - Modules 1, 2, 3/4 & 6`) |> 
+  rename_with(.cols = -c(wave, weight),
+              ~str_remove_all(.x, "Which of the following type\\(s\\) of green and natural spaces have you visited during the last month: ")) |> 
+  mutate(across(where(is.factor), ~as.character(.x))) |> 
+  pivot_longer(cols = -c(wave, weight, date, fy),
+               names_to = "space",
+               values_to = "answer") |> 
+  group_by(fy, space, answer) |> 
+  summarise(weight = sum(weight, na.rm = TRUE)) |> 
+  ungroup() |> 
+  filter(!is.na(answer)) |> 
+  group_by(fy, space) |> 
+  mutate(pct = weight / sum(weight)) |> 
+  ungroup() |> 
+  filter(answer == "Yes",
+         str_detect(space, "Woodland")) |> 
+  select(fy, space, pct)
+```
+
+# Table 6.1
+
+# Number of visits to forest and woodland (module 2): asked in last 2 weeks and grossed to English population in last month
+
+The relevant columns to explore annual number of visits to forest and woodland are:
+
+1. `Wave`: each wave corresponds to a month.
+2. `M2A_Q2`: "Which of these best describes the main destination of your visit? (i.e. the place you spent most time in)" 
+3. `No_Of_Visits`: "How many times, if at all, did you make this type of visit to green and natural spaces in the last 14 days?"
+4. `Weight_Grossed_No_Of_Visits`: estimated total number of visits to green and natural spaces in the past month (in '000s).
+
+## Total number of visits to green and natural spaces where forest or woodland was the main destination.
+
+```{r}
+pans_raw |> 
+  select(Respondent_ID, Wave, M2A_Q2, No_Of_Visits, Weight_Grossed_No_Of_Visits) |> 
+  filter(M2A_Q2 == 4) |> 
+  select(-M2A_Q2) |> 
+  mutate(Wave = to_factor(Wave)) |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date),
+         fy = nprs::date2fy(date, fye = TRUE)) |> 
+  filter(No_Of_Visits > 0) |> # remove "Prefer not to say" and "Don't know" 
+  select(-c(wave)) |> 
+  mutate(No_Of_Visits_num = as.numeric(No_Of_Visits)) |> 
+  mutate(nb_visit = No_Of_Visits_num * Weight_Grossed_No_Of_Visits) |> 
+  group_by(fy) |> 
+  summarise(nb_visit = sum(nb_visit, na.rm = TRUE)) |> 
+  ungroup() |> 
+  mutate(nb_visit = (nb_visit * 1e3) / 1e6)
+```
+
+# Table 6.2a
+
+# Main mode of transport
+
+This question was only asked to 30% of those that reported visiting woodland in the last 14 days.
+
+1. `M2A_SUB_Q1`: What was the main form of transport you used to reach your main destination?
+
+```{r}
+transport_mode <- pans_lbld |> 
+  select(Wave, M2A_Q2, M2A_SUB_Q1, Weight_Percent_M2A_SUB) |> 
+  filter(M2A_Q2 == "Woodland or forest") |> 
+  filter(!is.na(M2A_SUB_Q1)) |> 
+  group_by(Wave, M2A_SUB_Q1) |> 
+  summarise(weight = sum(Weight_Percent_M2A_SUB, na.rm = TRUE)) |> 
+  ungroup() |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date),
+         fy = nprs::date2fy(date, fye = TRUE)) |> 
+  filter(fy %in% c(2021, 2022)) |> 
+  group_by(fy, M2A_SUB_Q1) |> 
+  summarise(weight = sum(weight, na.rm = TRUE)) |> 
+  ungroup() |> 
+  group_by(fy) |> 
+  mutate(pct = weight/sum(weight)) |> 
+  ungroup()
+```
+
+```{r}
+transport_mode |> 
+  select(-weight) |> 
+  pivot_wider(names_from = "fy",
+              values_from = "pct") |> 
+  arrange(desc(`2022`)) |> 
+  mutate(across(where(is.numeric), ~round2(.x*100, 0)))
+```
+
+# Table 6.2b
+
+M2A_Q6
+
+```{r}
+dist_travelled <- pans_lbld |> 
+  select(Wave, M2A_Q2, M2A_Q6, Weight_Percent_M2A) |> 
+  filter(M2A_Q2 == "Woodland or forest") |> 
+  filter(!is.na(M2A_Q6)) |> 
+  group_by(Wave, M2A_Q6) |> 
+  summarise(weight = sum(Weight_Percent_M2A, na.rm = TRUE)) |> 
+  ungroup() |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date),
+         fy = nprs::date2fy(date, fye = TRUE)) |> 
+  filter(fy %in% c(2021, 2022)) |> 
+  group_by(fy, M2A_Q6) |> 
+  summarise(weight = sum(weight, na.rm = TRUE)) |> 
+  ungroup() |> 
+  group_by(fy) |> 
+  mutate(pct = weight/sum(weight)) |> 
+  ungroup()
+```
+
+```{r}
+dist_travelled |> 
+  select(-weight) |> 
+  pivot_wider(names_from = "fy",
+              values_from = "pct") |> 
+  mutate(across(where(is.numeric), ~round2(.x*100, 0)))
+```
+
+# Table 6.2c
+
+M2A_SUB_Q5: What were the main three reasons for taking this visit?
+
+```{r}
+motivation <- pans_lbld |> 
+  select(Wave, M2A_Q2, contains("M2A_SUB_Q5"), Weight_Percent_M2A_SUB) |> 
+  filter(M2A_Q2 == "Woodland or forest") |> 
+  select(-M2A_Q2) |> 
+  sjlabelled::label_to_colnames() |> 
+  pivot_longer(cols = -c(`Month of interview`, `Weight - percentages ONLY - Module 2A_SUB (visit level analysis)`),
+               names_to = "motivation",
+               values_to = "yay_nay") |> 
+  rename(Wave = `Month of interview`,
+         Weight_Percent_M2A_SUB = `Weight - percentages ONLY - Module 2A_SUB (visit level analysis)`) |> 
+  filter(yay_nay == "Yes") |> 
+  select(-c(yay_nay)) |> 
+  mutate(motivation = str_remove_all(motivation, "What was the main reason for taking this visit\\?\\: ")) |> 
+  group_by(Wave, motivation) |> 
+  summarise(weight = sum(Weight_Percent_M2A_SUB, na.rm = TRUE)) |> 
+  ungroup() |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date),
+         fy = nprs::date2fy(date, fye = TRUE)) |> 
+  filter(fy %in% c(2021, 2022)) |> 
+  group_by(fy, motivation) |> 
+  summarise(weight = sum(weight, na.rm = TRUE)) |> 
+  ungroup() |> 
+  group_by(fy) |> 
+  mutate(pct = weight/sum(weight)) |> 
+  ungroup()
+```
+
+```{r}
+motivation <- pans_lbld |> 
+  select(Wave, M2A_Q2, contains("M2A_SUB_Q5"), Weight_Percent_M2A_SUB) |> 
+  filter(M2A_Q2 == "Woodland or forest") |> 
+  select(-M2A_Q2) |> 
+  sjlabelled::label_to_colnames() |> 
+  pivot_longer(cols = -c(`Month of interview`,
+                         `Weight - percentages ONLY - Module 2A_SUB (visit level analysis)`),
+               names_to = "motivation",
+               values_to = "yay_nay") |> 
+  mutate(motivation = str_remove_all(motivation, "What was the main reason for taking this visit\\?\\: ")) |> 
+  rename(Wave = `Month of interview`,
+         Weight_Percent_M2A_SUB = `Weight - percentages ONLY - Module 2A_SUB (visit level analysis)`) |> 
+  filter(!is.na(Weight_Percent_M2A_SUB )) |> 
+  group_by(Wave, motivation, yay_nay) |> 
+  summarise(weight = sum(Weight_Percent_M2A_SUB, na.rm = TRUE)) |> 
+  ungroup() |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date),
+         fy = nprs::date2fy(date, fye = TRUE)) |> 
+  filter(fy %in% c(2021, 2022)) |> 
+  group_by(fy, motivation, yay_nay) |> 
+  summarise(weight = sum(weight, na.rm = TRUE)) |> 
+  ungroup() |> 
+  group_by(fy, motivation) |> 
+  mutate(pct = weight/sum(weight)) |> 
+  ungroup() |> 
+  filter(yay_nay == "Yes")
+```
+
+```{r}
+motivation |> 
+  select(-weight,
+         -yay_nay) |> 
+  pivot_wider(names_from = "fy",
+              values_from = "pct") |> 
+  arrange(desc(`2022`)) |> 
+  mutate(across(where(is.numeric), ~round2(.x*100, 0)))
+```
+
+# Table 6.2d
+
+M2A_Q8A
+
+```{r}
+visit_activity <- pans_lbld |> 
+  select(Wave, M2A_Q2, contains("M2A_Q8A"), Weight_Percent_M2A) |> 
+  filter(M2A_Q2 == "Woodland or forest") |> 
+  select(-M2A_Q2) |> 
+  sjlabelled::label_to_colnames() |> 
+  pivot_longer(cols = -c(`Month of interview`, `Weight - percentages ONLY - Module 2A (visit level analysis)`),
+               names_to = "activity",
+               values_to = "yay_nay") |> 
+  rename(Wave = `Month of interview`,
+         Weight_Percent_M2A = `Weight - percentages ONLY - Module 2A (visit level analysis)`) |> 
+  # filter(yay_nay == "Yes") |> 
+  # select(-c(yay_nay)) |> 
+  mutate(activity = str_remove_all(activity, "Which of these activities, if any, did you do on this specific visit\\? \\: ")) |> 
+  group_by(Wave, activity, yay_nay) |> 
+  summarise(weight = sum(Weight_Percent_M2A, na.rm = TRUE)) |> 
+  ungroup() |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date),
+         fy = nprs::date2fy(date, fye = TRUE)) |> 
+  filter(fy %in% c(2021, 2022)) |> 
+  group_by(fy, activity, yay_nay) |> 
+  summarise(weight = sum(weight, na.rm = TRUE)) |> 
+  ungroup() |> 
+  group_by(fy, activity) |> 
+  mutate(pct = weight/sum(weight)) |> 
+  ungroup() |> 
+  filter(yay_nay == "Yes")
+```
+
+```{r}
+visit_activity |> 
+  select(-weight, -yay_nay) |> 
+  pivot_wider(names_from = "fy",
+              values_from = "pct") |> 
+  arrange(desc(`2022`)) |> 
+  mutate(across(where(is.numeric), ~round2(.x*100, 0)))
+```
+
+# Table 6.2e
+
+M2A_Q7
+
+```{r}
+visit_duration <- pans_lbld |> 
+  select(Wave, M2A_Q2, M2A_Q7, Weight_Percent_M2A) |> 
+  filter(M2A_Q2 == "Woodland or forest") |> 
+  filter(!is.na(M2A_Q7)) |> 
+  group_by(Wave, M2A_Q7) |> 
+  summarise(weight = sum(Weight_Percent_M2A, na.rm = TRUE)) |> 
+  ungroup() |> 
+  separate(col = Wave,
+           into = c("wave", "date"),
+           sep = " - ") |> 
+  mutate(date = my(date),
+         fy = nprs::date2fy(date, fye = TRUE)) |> 
+  filter(fy %in% c(2021, 2022)) |> 
+  group_by(fy, M2A_Q7) |> 
+  summarise(weight = sum(weight, na.rm = TRUE)) |> 
+  ungroup() |> 
+  group_by(fy) |> 
+  mutate(pct = weight/sum(weight)) |> 
+  ungroup()
+```
+
+```{r}
+visit_duration |> 
+  select(-weight) |> 
+  pivot_wider(names_from = "fy",
+              values_from = "pct") |> 
+  mutate(across(where(is.numeric), ~round2(.x*100, 0)))
+```
