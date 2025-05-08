@@ -45,7 +45,6 @@ pacman::p_load(here,
 #| 
 pans_y2 <- read_sav("wales_21.sav") %>% zap_formats() %>% zap_labels() %>% clean_names()
 
-pans_y2 <- pans_y2 %>% mutate(across(everything(), as.factor))
 
 pans_y2 <- pans_y2 %>%
   select(m1_q2_4, m2a_q2, no_of_visits, age, gender, qualification, income,
@@ -90,8 +89,7 @@ ggemmeans(y2_model, "age") %>%
   #                  limits = c(0, 1)) +
   labs(x = NULL,
        y = NULL,
-       subtitle = "Estimated proportion of woodland visitors") +
-  theme_gss(tick_mark = "x")
+       subtitle = "Estimated proportion of woodland visitors") 
 ```
 
 ```{r}
