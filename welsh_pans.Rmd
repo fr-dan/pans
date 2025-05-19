@@ -19,6 +19,9 @@ editor_options:
 #| include: false
 
 require(magrittr) 
+require(ggplot2)
+require(ggeffects)
+require(afcharts)
 
 pans_y2 <- haven::read_sav("wales_21.sav") %>% 
   haven::zap_formats() %>% 
@@ -33,7 +36,26 @@ pans_y2 <- pans_y2 %>%
   dplyr::rename(imd_decile = home_imd_decile,
          employment = work_status) %>%
   dplyr::mutate(income = as.integer(income),
-         imd_decile = as.numeric(imd_decile))
+         imd_decile = as.numeric(imd_decile)) %>%
+  dplyr::mutate(age = as.numeric(age)) %>%
+  dplyr::mutate(age = dplyr::case_when(
+      age >= 16 & age <= 24 ~ "16-24",
+      age >= 25 & age <= 39 ~ "25-39",
+      age >= 40 & age <= 54 ~ "40-54",
+      age >= 55 & age <= 64 ~ "55-64",
+      age >= 65 ~ "65+",
+      TRUE ~ NA_character_ # Set anything else to NA
+    )) %>%
+  dplyr::mutate(age = forcats::fct_relevel(factor(age),
+                                           "16-24",
+                                           "25-39",
+                                           "40-54",
+                                           "55-64",
+                                           "65+"))
+
+m1_q2_4 <- pans_y2 %>% 
+  dplyr::select(-m2a_q2,
+         -no_of_visits)
 
 ```
 
@@ -51,15 +73,18 @@ The following socio-demographic characteristics were controlled for in the analy
 
 #### Table 1: Breakdown of socio-demographic profile
 
-```{r}
-#| echo: false
-readxl::read_excel(here::here("pans-report", "year1", "pans-table1.xlsx")) %>% 
-  dplyr::mutate(`Socio-demographic characteristic` = tidyr::replace_na(`Socio-demographic characteristic`, "")) %>% 
-  knitr::kable()
-```
 
 ## Statistical analysis
 
+```{r}
+#| include: false
+
+y2_model <- glm(m1_q2_4 ~.,
+                data = m1_q2_4,
+                family = "binomial")
+
+summary(y2_model)
+```
 All analyses were conducted in R 4.2.1 (R Core Team, 2022). We used generalised linear modelling to investigate the association between woodland engagement (dependent/response variable) and socio-demographic profile (independent variables/predictors).
 
 Models were created for all possible combination of predictors plus an intercept-only null model, representing statistically random variation around a constant mean. An information theoretic approach was taken, with model performance assessed using Akaike's Information Criterion (AIC), Akaike weights ($w_i$) and Tjur's Coefficient of Discrimination ($R^2$). Collinearity occurs when predictors are correlated with one another, and leads to over-estimation of model fit. The variance inflation factor (VIF) was used to measure collinearity, with a cut-off of VIF \< 5.
@@ -79,22 +104,20 @@ Woodland engagement was higher among younger people than older people. For examp
 
 ```{r}
 #| echo: false
-ggemmeans(full_model, "age", rg.limit = 72000) %>% 
+ggemmeans(y2_model, "age", rg.limit = 72000) %>% 
   as.data.frame() %>% 
   ggplot(aes(x, predicted)) +
-  geom_point(size = 2,
-             colour = colour_selector(1)) +
+  geom_point(size = 2) +
   geom_linerange(aes(ymin = conf.low,
                      ymax = conf.high),
-                 linewidth = 1,
-                 colour = colour_selector(1)) +
-  scale_y_cont_gss(labels = percent,
+                 linewidth = 1) +
+  afcharts::scale_colour_continuous_af(labels = scales::percent,
                    breaks = seq(0, 1, 0.2),
                    limits = c(0, 1)) +
   labs(x = NULL,
        y = NULL,
        subtitle = "Estimated proportion of woodland visitors") +
-  theme_gss(tick_marks = T)
+  theme_af()
 ```
 
 People from the South East and South West are more likely to report having visited woodland in the last month, compared to the other regions of England (Figure 2). People from London were least likely to have visited woodland in the last month (estimated marginal mean of 20% (95% CI: 17-22%).
@@ -103,10 +126,10 @@ People from the South East and South West are more likely to report having visit
 
 ```{r}
 #| echo: false
-ggemmeans(full_model, "region", rg.limit = 36000) %>% 
-  as.data.frame() %>% 
-  as_tibble() %>% 
-  mutate(x = fct_reorder(x, predicted)) %>% 
+ggemmeans(y2_model, "region", rg.limit = 36000) %>% 
+  dplyr::as.data.frame() %>% 
+  dplyr::as_tibble() %>% 
+  dplyr::mutate(x = forcats::fct_reorder(x, predicted)) %>% 
   ggplot(aes(predicted, x)) +
   geom_point(size = 2,
              colour = colour_selector(1)) +
@@ -129,7 +152,7 @@ An estimated 21% (95% CI: 19-23%) of people from IMD decile 1 (most deprived) ar
 
 ```{r}
 #| echo: false
-ggemmeans(full_model, "imd_decile", rg.limit = 360000) %>% 
+ggemmeans(y2_model, "imd_decile", rg.limit = 360000) %>% 
   as.data.frame() %>% 
   ggplot(aes(x, predicted)) +
   geom_point(size = 2,
@@ -156,7 +179,7 @@ Higher income people are more likely to engage with woodland or forest compared 
 
 ```{r}
 #| echo: false
-ggemmeans(full_model, "income", rg.limit = 36000) %>% 
+ggemmeans(y2_model, "income", rg.limit = 36000) %>% 
   as.data.frame() %>% 
   ggplot(aes(predicted, x)) +
   geom_point(size = 2,
