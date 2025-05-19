@@ -88,7 +88,7 @@ Data were from year 2 of the [People and Nature Survey](https://beta.ukdataservi
 
 Woodland engagement was estimated by asking *Which of the following type(s) of green and natural spaces have you visited during the last month?* (M1_Q2_4). Of the 5,954 respondents, 2,125 (36%) answered yes they had visited woodland or forest.
 
-The following socio-demographic characteristics were controlled for in the analysis: age, education (level of highest qualification), employment status, ethnicity, gender, Index of Multiple Deprivation (IMD) decile, income, home region, and urban-rural classification. Socio-demographic characteristics are summarised in Table 1.
+The following socio-demographic characteristics were controlled for in the analysis: age, education (level of highest qualification), employment status, ethnicity, Index of Multiple Deprivation (IMD) decile and income. Socio-demographic characteristics are summarised in Table 1.
 
 #### Table 1: Breakdown of socio-demographic profile
 
@@ -134,84 +134,52 @@ y2_model <- glm(woodland_visit ~.,
 summary(y2_model)
 ```
 
-Summary of Findings: Factors Influencing Woodland Visits in the Last Month
+Findings Summary
 
-Model Overview
-	•	Dependent Variable (Y): Respondent visited woodland in the last month (binary outcome).
-	•	Model Type: Logistic regression.
-	•	Dataset: 4,705 observations (1,216 excluded due to missingness).
-	•	Performance Metrics:
-	•	Null Deviance: 6260.6
-	•	Residual Deviance: 6015.6
-	•	AIC: 6073.6
-
-Key Findings
-
-The model identifies several significant predictors of woodland visits. Below are the key observations grouped by variable type:
+The logistic regression model examines the likelihood of a respondent visiting a woodland in the last month (Y = 1) based on socio-demographic and geographic predictors. Key findings are summarized below:
 
 ⸻
 
-1. Age Band
-	•	25–39: Positive association (\beta = 0.23), marginally significant (p = 0.082).
-	•	40–54: No significant effect (p = 0.442).
-	•	55–64: Significant negative association (\beta = -0.49, p < 0.001).
-	•	65+: Strong negative association (\beta = -0.58, p < 0.001).
+Significant Predictors
 
-Interpretation: Younger adults (25–39) are more likely to visit woodlands compared to older age groups (55+), who are significantly less likely.
+1. Age:
+	•	Older adults (55–64, 65+): Strong negative association with woodland visits. Respondents in these age groups are significantly less likely to visit woodlands compared to the reference category (p < 0.001).
+	•	Young adults (25–39): Showed a marginally positive trend (p = 0.082), suggesting higher odds of visiting compared to the baseline.
 
-⸻
+2. Qualifications:
+	•	Respondents with no qualifications were significantly less likely to visit woodlands (\beta = -0.48, p = 0.003) compared to those with higher qualifications.
 
-2. Qualification
-	•	No qualifications: Significant negative effect (\beta = -0.48, p = 0.003).
-	•	Other qualification categories show no significant effects.
+3. Income:
+	•	Middle-income groups (e.g., £20,000–29,999, £30,000–39,999, £40,000–49,999, £50,000–59,999) were positively associated with woodland visits (p < 0.05).
+	•	High-income groups (£80,000–99,999) also showed a strong positive association (\beta = 0.53, p = 0.006).
+	•	Very high incomes (£150,000+) were not significantly associated.
 
-Interpretation: Respondents without qualifications are less likely to visit woodlands compared to those with any formal education.
+4. Geographic Deprivation (IMD Decile):
+	•	Living in less deprived areas (higher IMD deciles) positively correlated with woodland visits:
+	•	IMD deciles 5–10 were all significantly associated with higher odds of visiting, with increasing strength as deprivation decreased (p < 0.01).
 
-⸻
-
-3. Income
-	•	Significant positive effects observed for middle-income groups:
-	•	£20,000–29,999 (\beta = 0.21, p = 0.035)
-	•	£30,000–39,999 (\beta = 0.24, p = 0.028)
-	•	£40,000–49,999 (\beta = 0.25, p = 0.039)
-	•	£50,000–59,999 (\beta = 0.29, p = 0.033)
-	•	£80,000–99,999: Largest positive effect (\beta = 0.53, p = 0.006).
-	•	Highest income groups (£150,000+): No significant association (p = 0.188).
-
-Interpretation: Woodland visits are more common among middle-to-high-income groups, with diminishing returns for the highest earners.
+5. Ethnicity:
+	•	Asian or Asian British (\beta = -2.10, p < 0.001) and Black or Black British (\beta = -1.38, p = 0.036) respondents were significantly less likely to visit woodlands.
+	•	Mixed and White respondents showed no significant differences compared to the baseline.
 
 ⸻
 
-4. Home IMD Decile (Deprivation Index)
-	•	Significant positive associations for deciles 5–10 (less deprived areas):
-	•	Decile 7 (\beta = 0.62, p < 0.001)
-	•	Decile 8 (\beta = 0.71, p < 0.001)
-	•	Decile 10 (\beta = 0.60, p < 0.001)
-
-Interpretation: Respondents living in less deprived areas are significantly more likely to visit woodlands.
+Insignificant Predictors
+	•	Income bands below £20,000 and above £100,000-£149,999 showed no significant impact.
+	•	Some geographic IMD deciles (e.g., 2, 3, 4) and the qualifications category “Any other qualifications” were not statistically significant.
 
 ⸻
 
-5. Ethnicity
-	•	Asian or Asian British: Strong negative association (\beta = -2.10, p < 0.001).
-	•	Black or Black British: Negative association (\beta = -1.38, p = 0.036).
-	•	Mixed: Negative association (\beta = -0.76), not significant (p = 0.187).
-	•	White: No significant association (p = 0.531).
-
-Interpretation: Ethnic minority groups, particularly Asian and Black respondents, are less likely to visit woodlands compared to White respondents.
+Model Fit
+	•	Residual Deviance: 6015.6 (improved from null deviance of 6260.6, indicating the model explains some variance).
+	•	AIC: 6073.6 (acceptable fit).
+	•	Significant Predictors Count: Several predictors across demographics, income, area deprivation, and ethnicity were meaningful contributors.
 
 ⸻
 
-Conclusions
-	1.	Age and Education: Woodland visits are skewed towards younger and educated populations, with older adults and those without qualifications less likely to participate.
-	2.	Income and Area Deprivation: Middle-to-higher-income groups and those living in less deprived areas are significantly more likely to visit woodlands.
-	3.	Ethnicity Disparities: There are marked differences in woodland visits across ethnic groups, with minority ethnic groups (Asian and Black) less likely to visit.
+Conclusion
 
-Recommendations
-	1.	Targeted Outreach: Programs to encourage woodland visits among older adults, low-income groups, and minority ethnic communities could improve inclusivity.
-	2.	Accessibility: Address barriers for those in more deprived areas, such as transportation and awareness.
-	3.	Cultural Relevance: Develop initiatives that align with the cultural preferences of underrepresented groups to foster engagement.
-
+The likelihood of visiting a woodland is influenced by a combination of socio-demographic factors (age, income, ethnicity, qualifications) and geographic characteristics (area deprivation). Middle-income groups, less deprived areas, and certain age bands (young adults) are more likely to visit, while older adults, less qualified individuals, and certain ethnic minorities are less likely to participate. These insights can inform targeted outreach or policy interventions to encourage more equitable woodland engagement.
 
 #### Figure 1: Estimated marginal means for woodland engagement by age
 
