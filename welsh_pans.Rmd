@@ -1,0 +1,232 @@
+---
+title: "An analysis of woodland engagement and socio-demographic profile in Wale's People and Nature Survey (2020/21)"
+author: Daniel Braby
+description: "Programme 3: Societal benefits of trees, woods and forests"
+date: today
+date-format: "D MMMM YYYY"
+embed-resources: TRUE
+format:
+  docx:
+    reference-doc: Z:\IFOS\Statistics\Data\Social\Programme 3 work\programme3\fr-reference-doc.docx
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+```{r}
+#| include: false
+
+require(magrittr) 
+
+pans_y2 <- haven::read_sav("wales_21.sav") %>% 
+  haven::zap_formats() %>% 
+  haven::zap_labels() %>% 
+  janitor::clean_names()
+
+pans_y2 <- pans_y2 %>% 
+  dplyr::mutate(dplyr::across(dplyr::everything(), as.factor))
+
+pans_y2 <- pans_y2 %>%
+  dplyr::select(m1_q2_4, m2a_q2, no_of_visits, age, gender, qualification, income,home_imd_decile, ethnicity, work_status) %>%
+  dplyr::rename(imd_decile = home_imd_decile,
+         employment = work_status) %>%
+  dplyr::mutate(income = as.integer(income),
+         imd_decile = as.numeric(imd_decile))
+
+```
+
+# Methodology
+
+## Study design and sample
+
+Data were from year 2 of the [People and Nature Survey](https://beta.ukdataservice.ac.uk/datacatalogue/series/series?id=2000125) (PANS) for Wales (Natural Resources Wales, 2022). PANS is a nationally representative omnibus survey commissioned by Natural Resources Wales which gathers information on people's engagement, understanding and attitude towards the natural environment. Data were collected online (by Kantar). The survey builds on the Monitor of Engagement with the Natural Environment (MENE) survey which ran from 2009 to 2019.
+
+## Data
+
+Woodland engagement was estimated by asking *Which of the following type(s) of green and natural spaces have you visited during the last month?* (M1_Q2_4). Of the 5,954 respondents, 2,125 (36%) answered yes they had visited woodland or forest.
+
+The following socio-demographic characteristics were controlled for in the analysis: age, education (level of highest qualification), employment status, ethnicity, gender, Index of Multiple Deprivation (IMD) decile, income, home region, and urban-rural classification. Socio-demographic characteristics are summarised in Table 1.
+
+#### Table 1: Breakdown of socio-demographic profile
+
+```{r}
+#| echo: false
+readxl::read_excel(here::here("pans-report", "year1", "pans-table1.xlsx")) %>% 
+  dplyr::mutate(`Socio-demographic characteristic` = tidyr::replace_na(`Socio-demographic characteristic`, "")) %>% 
+  knitr::kable()
+```
+
+## Statistical analysis
+
+All analyses were conducted in R 4.2.1 (R Core Team, 2022). We used generalised linear modelling to investigate the association between woodland engagement (dependent/response variable) and socio-demographic profile (independent variables/predictors).
+
+Models were created for all possible combination of predictors plus an intercept-only null model, representing statistically random variation around a constant mean. An information theoretic approach was taken, with model performance assessed using Akaike's Information Criterion (AIC), Akaike weights ($w_i$) and Tjur's Coefficient of Discrimination ($R^2$). Collinearity occurs when predictors are correlated with one another, and leads to over-estimation of model fit. The variance inflation factor (VIF) was used to measure collinearity, with a cut-off of VIF \< 5.
+
+
+Significant socio-demographic characteristics were identified based on Analysis of Variance (ANOVA) using likelihood ratio chi-squared statistics (Fox & Weisberg, 2019). Estimated marginal means for each socio-demographic characteristic were estimated post-hoc using the `ggemmeans()` function in the `{ggeffects}` package (Lüdecke, 2018). Model fit statistics (AIC, $w_i$, Tjur's $R^2$) were calculated using the `{performance}` package (Lüdecke, 2021).
+
+# Results
+
+A model in which woodland engagement was regressed against all predictors (age, employment status, ethnicity, gender, IMD decile, income, qualification level and home region) was the best-supported model ($w_i$ = 0.85), with socio-demographic characteristics explaining approximately 5% (Tjur's $R^2$ = 0.05) of the variance in woodland engagement. Summary statistics for all models with $w_i > 0.01$ can be found in Supplementary Table 3. The findings presented here are for the best-supported full model only.
+
+All socio-demographic characteristics were statistically significant at $p < 0.01$ except for education.
+
+Woodland engagement was higher among younger people than older people. For example, in the 16-24 age group, an estimated 33% (95% CI: 30-37%) of people reported engaging with woodland in the last month, compared with an estimated 19% (95% CI: 17-22%) of people aged 65 and over (Figure 1). These results are consistent with the addition of long-term illness as a binary predictor and an age-illnesses interaction term.
+
+#### Figure 1: Estimated marginal means for woodland engagement by age
+
+```{r}
+#| echo: false
+ggemmeans(full_model, "age", rg.limit = 72000) %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x, predicted)) +
+  geom_point(size = 2,
+             colour = colour_selector(1)) +
+  geom_linerange(aes(ymin = conf.low,
+                     ymax = conf.high),
+                 linewidth = 1,
+                 colour = colour_selector(1)) +
+  scale_y_cont_gss(labels = percent,
+                   breaks = seq(0, 1, 0.2),
+                   limits = c(0, 1)) +
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "Estimated proportion of woodland visitors") +
+  theme_gss(tick_marks = T)
+```
+
+People from the South East and South West are more likely to report having visited woodland in the last month, compared to the other regions of England (Figure 2). People from London were least likely to have visited woodland in the last month (estimated marginal mean of 20% (95% CI: 17-22%).
+
+#### Figure 2: Estimated marginal means for woodland engagement by home region
+
+```{r}
+#| echo: false
+ggemmeans(full_model, "region", rg.limit = 36000) %>% 
+  as.data.frame() %>% 
+  as_tibble() %>% 
+  mutate(x = fct_reorder(x, predicted)) %>% 
+  ggplot(aes(predicted, x)) +
+  geom_point(size = 2,
+             colour = colour_selector(1)) +
+  geom_linerange(aes(xmin = conf.low,
+                     xmax = conf.high),
+                 linewidth = 1,
+                 colour = colour_selector(1)) +
+  scale_x_cont_gss(labels = percent,
+                   breaks = seq(0, 1, 0.2),
+                   limits = c(0, 1)) +
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "Estimated proportion of woodland visitors") +
+  theme_gss(grid = "x")
+```
+
+An estimated 21% (95% CI: 19-23%) of people from IMD decile 1 (most deprived) areas visited woodland in the last month, compared to an estimated 31% (95% CI: 28-34%) from IMD decile 10 (least deprived) areas. As with age, a consistent, monotonic trend is observed with woodland engagement and IMD decile, where woodland engagement increases with decreasing deprivation.
+
+#### Figure 3: Estimated marginal means for woodland engagement by home Index of Multiple Deprivation (IMD) decile
+
+```{r}
+#| echo: false
+ggemmeans(full_model, "imd_decile", rg.limit = 360000) %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x, predicted)) +
+  geom_point(size = 2,
+             colour = colour_selector(1)) +
+  geom_linerange(aes(ymin = conf.low,
+                     ymax = conf.high),
+                 linewidth = 1,
+                 colour = colour_selector(1)) +
+  scale_x_cont_gss(breaks = seq(1, 10, 1),
+                   limits = c(1, 10)) +
+  scale_y_cont_gss(labels = percent,
+                   breaks = seq(0, 1, 0.2),
+                   limits = c(0, 1)) +
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "Estimated proportion of woodland visitors") +
+  theme_gss(grid = "y",
+            tick_marks = T)
+```
+
+Higher income people are more likely to engage with woodland or forest compared with lower income people. For example, in the £50,000+ income band, an estimated 30% (95% CI: 27-33%) of people visited woodland in the last month, compared to 22% (95% CI: 19-24) in the £0-14,999.
+
+#### Figure 4: Estimated marginal means for woodland engagement by income
+
+```{r}
+#| echo: false
+ggemmeans(full_model, "income", rg.limit = 36000) %>% 
+  as.data.frame() %>% 
+  ggplot(aes(predicted, x)) +
+  geom_point(size = 2,
+             colour = colour_selector(1)) +
+  geom_linerange(aes(xmin = conf.low,
+                     xmax = conf.high),
+                 linewidth = 1,
+                 colour = colour_selector(1)) +
+  scale_x_cont_gss(labels = percent,
+                   breaks = seq(0, 1, 0.2),
+                   limits = c(0, 1)) +
+  scale_y_cont_gss(labels = c(paste0(enc2utf8("\u00A3"), "0-14,999"),
+                              paste0(enc2utf8("\u00A3"), "15,000-19,999"),
+                              paste0(enc2utf8("\u00A3"), "20,000-29,999"),
+                              paste0(enc2utf8("\u00A3"), "30,000-39,999"),
+                              paste0(enc2utf8("\u00A3"), "40,000-49,999"),
+                              paste0(enc2utf8("\u00A3"), "50,000+"))) +
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "Estimated proportion of woodland visitors") +
+  theme_gss(grid = "y",
+            tick_marks = T)
+```
+
+### Supplementary analysis
+
+Supplementary analyses were conducted to look at duration of woodland visit and socio-demographic profile, and main activity undertaken during woodland visit, both questions concerning the last fortnight. (This is in contrast to question M1_Q2_4 which asked respondents about woodland engagement in the last month).
+
+-   Frequency of woodland visit was estimated by asking *How many times, if at all, did you make this type of visit to green and natural spaces in the last 14 days?* (No_of_Visits).
+
+-   Activity was estimated by asking *Which of these activities, if any, did you do on this specific visit?* (M2A_Q8A).
+
+### Supplementary Table 1: Tabulation of IMD decile and urban-rural classification {#sec-supplementary-table-1}
+
+| IMD decile | Urban-rural classification | Sample size ($n$) |
+|------------|----------------------------|-------------------|
+| 1          | NA                         | 1,923             |
+| 2          | NA                         | 1,968             |
+| 3          | NA                         | 2,114             |
+| 4          | NA                         | 2,110             |
+| 5          | NA                         | 1,937             |
+| 6          | NA                         | 1,995             |
+| 7          | NA                         | 2,024             |
+| 8          | NA                         | 2,019             |
+| 9          | NA                         | 2,085             |
+| 10         | NA                         | 1,907             |
+| NA         | Rural                      | 1,420             |
+| NA         | Urban                      | 3,364             |
+| NA         | NA                         | 128               |
+
+### Supplementary Table 2: Model performance comparison for full model including IMD decile or urban-rural classification {#sec-supplementary-table-2}
+
+| Model                   | AIC      | Akaike weight ($w_i$) | Tjur's $R^2$ |
+|-------------------------|----------|-----------------------|--------------|
+| Model incl. IMD decile  | 20,206.8 | \<0.001               | 0.045        |
+| Model incl. urban-rural | 4,060.0  | \>0.999               | 0.074        |
+
+### Supplementary Table 3: Multi-model comparison
+
+```{r}
+#| echo: false
+#| message: false
+multi_model_summary <- readr::read_csv(here("data", "multi-model-comparison.csv"))
+
+multi_model_summary %>% 
+  filter(w > 0.01) %>% 
+  mutate(aic = scales::comma(aic, accuracy = 1),
+         w = round(w, 2),
+         r2 = round(r2, 3)) %>% 
+  knitr::kable(col.names = c("Formula", "AIC", "$w_i$", "Tjur's $R^2$"))
+```
+
+\*Showing models with $w_i > 0.01$ only.
